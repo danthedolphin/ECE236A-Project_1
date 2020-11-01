@@ -10,6 +10,7 @@ ytrain =Y_train.reshape(Y_train.shape[0], -1)
 xtest = X_test.reshape(X_test.shape[0], -1)
 ytest = Y_test.reshape(Y_test.shape[0], -1)
 # data type
+# data type
 xtrain = xtrain.astype('uint8')
 ytrain = ytrain.astype('int8')
 xtest = xtest.astype('uint8')
@@ -17,15 +18,23 @@ ytest = ytest.astype('int8')
 # get data
 xtrain, ytrain, _ = data_extract(xtrain, ytrain, [1, 7])
 xtest, ytest, _ = data_extract(xtest, ytest, [1, 7])
-xtest, ytest = drop_data(xtest, ytest, 0.6, 1, 1.0)
-xtrain_adv, ytrain_adv = drop_data(xtrain, ytrain, 0, 1.0, 0.1)
-xtrain_mod, ytrain_mod = drop_data(xtrain, ytrain, [0.4, 0.6, 0.8], 1, 0.7)
+xtest, ytest = drop_data(xtest, ytest, 0.8, 1.0)
+xtrain_adv, ytrain_adv = drop_data(xtrain, ytrain, 0, 0.1)
+xtrain_mod, ytrain_mod = drop_data(xtrain, ytrain, [0.4, 0.6, 0.8], 1.4)
 
 # test
+print(xtrain.shape)
 VanillaSVM(xtrain, ytrain, xtest, ytest)
-VanillaSVM_WithReg(xtrain, ytrain, xtest, ytest)
+VanillaSVM_WithwReg(xtrain, ytrain, xtest, ytest)
+VanillaSVM_WithwandbReg(xtrain, ytrain, xtest, ytest)
+
+print("modefied data")
+print(xtrain.shape)
+VanillaSVM(xtrain, ytrain, xtest, ytest)
+VanillaSVM_WithwReg(xtrain_mod, ytrain_mod, xtest, ytest)
+VanillaSVM_WithwandbReg(xtrain_mod, ytrain_mod, xtest, ytest)
+
 AdversarySVM(xtrain_adv, ytrain_adv, xtest, ytest)
-ModifiedDataSVM(xtrain_mod, ytrain_mod, xtest, ytest)
 
 
 #multi-class
@@ -42,8 +51,8 @@ ytest = ytest.astype('int8')
 # get data
 xtrain, ytrain, _ = data_extract(xtrain, ytrain, [1, 2, 3, 4])
 xtest, ytest, _ = data_extract(xtest, ytest, [1, 2, 3, 4])
-xtest, ytest = drop_data(xtest, ytest, 0.6, 1, 1)
-xtrain_mod, ytrain_mod = drop_data(xtrain, ytrain, [0.4, 0.6, 0.8], 1, 0.3)
+xtest, ytest = drop_data(xtest, ytest, 0.6, 1)
+xtrain_mod, ytrain_mod = drop_data(xtrain, ytrain, [0.4, 0.6, 0.8], 0.3)
 
 # test
 Vanilla_multiSVM(xtrain, ytrain, xtest, ytest)
