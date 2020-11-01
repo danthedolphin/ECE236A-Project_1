@@ -98,25 +98,25 @@ def get_label(label, k):
 # keep: means the percentage of data you want to keep, an integer
 # rep : means do rep times for the whole data, a real value from 0 to 1
 # if the input data has n samples, the output will have rep*n*keep samples, each drop its feature with prob p.
-def drop_data(data, label, p, k, memorycontrol):
+def drop_data(data, label, p, memorycontrol):
     if type(p) != list:
         tmp_p = p
-        t, l = drop_data_h(data, label, tmp_p, k, memorycontrol)
+        t, l = drop_data_h(data, label, tmp_p, memorycontrol)
     else:
         tmp_p = p[0]
-        t, l = drop_data_h(data, label, tmp_p, k, memorycontrol)
+        t, l = drop_data_h(data, label, tmp_p, memorycontrol)
         if len(p) > 1:
             for tmp_p in p[1:]:
-                tt, ll = drop_data_h(data, label, tmp_p, k, memorycontrol)
+                tt, ll = drop_data_h(data, label, tmp_p, memorycontrol)
                 t = np.concatenate((t, tt), axis=0)
                 l = np.concatenate((l, ll), axis=0)
     return t, l
 
 
 # the helper function for drop_data
-def drop_data_h(data, label, p, k, memorycontrol):
-    rep = int(memorycontrol/k - 0.01) + 1
-    keep = memorycontrol/k
+def drop_data_h(data, label, p, memorycontrol):
+    rep = int(memorycontrol/2 - 0.01) + 1
+    keep = memorycontrol/2
     # initialize
     n_sample = data.shape[0]
     n_keep = min(n_sample, int(n_sample * keep))
