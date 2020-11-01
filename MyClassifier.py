@@ -13,30 +13,67 @@ class MyClassifier:
     def __init__(self,K,M):
         self.K = K   # Number of classes
         self.M = M   # Number of features
-        self.W = []  # Weight
-        self.w = []  # Bias
-        # increase this value will lead to a higher memory used 1.4 in K=2 will use 21.2Gb for Minist
+        self.W = np.zeros([int(K*(K-1)/2), M])  # Weight
+        self.w = np.zeros([int(K*(K-1)/2), 1])  # Bias
+        self.mapping = []  # used for K>2, to map the real labesl to training labels
+        self.label2tag = []  # used for K=2, to map the real labesl to training labels
+        self.tag2label = []  # used for K=2, to map the training labesl to real labels
+        # increase this value will lead to a higher memory used， 1.4 will use 21.2Gb for Minist
         # but a higher memorycontrol value will lead to higher accuracy
         self.memorycontrol = 1.4
 
-    def __preprocess(self, train_data, train_label, p):
-        # change to array
-        data = np.array(train_data)
-        label = np.array(train_label)
-        # change to 2-d matrix
-        data = data.reshape(data.shape[0], self.M)
-        label = label.reshape(label.shape[0], -1)
-        # change type
-        data = data.astype('uint8')
-        label = label.astype('int8')
+    def __preprocess(self, data, label, p):
         # change label
         label2tag, tag2label, label = get_label(label, self.K)
         self.label2tag = label2tag
         self.tag2label = tag2label
         # get training set
         p = [max(0.01, p - 0.2), p, min(1, p + 0.2)]
-        train, label = drop_data(data, label, p, self.K, self.memorycontrol)
+        train, label = drop_data(data, label, p, self.memorycontrol)
         return train, label
+
+    def __trainTwoClass(self, xtrain, ytrain):
+        '''
+        n, d = xtrain.shape
+        c = np.concatenate((np.zeros([d + 1]), np.ones([n]), np.array([0.1])))
+        A1 = np.concatenate((-ytrain * xtrain, -ytrain, -np.diag(np.ones(n)), np.zeros([n, 1])), axis=1)
+        A2 = np.concatenate((0.0 * xtrain, 0.0 * ytrain, -np.diag(np.ones(n)), np.zeros([n, 1])), axis=1)
+        A3 = np.concatenate((np.zeros([2, d]), np.array([[1], [-1]]), np.zeros([2, n]), np.array([[-1], [-1]])),
+                            axis=1)
+        A = np.concatenate((A1, A2, A3), axis=0)
+        b = np.concatenate((-np.ones([n]), np.zeros([n + 2])))
+        print('shape of c: ' + str(c.shape))
+        print('shape of A: ' + str(A.shape))
+        print('shape of b: ' + str(b.shape))
+
+        # solve
+        x = cp.Variable(n + d + 2)
+        prob = cp.Problem(cp.Minimize(c.T @ x), [A @ x <= b])
+        prob.solve('SCS')
+
+        # get weights
+        W = np.array(x.value[0:d])
+        w = np.array(x.value[d + 1])
+        '''
+
+        # formulate the problem
+        n, d = xtrain.shape
+        c = np.ones(n)
+
+        e = cp.Variable(n)
+        lambda_reg = 0.01
+        w = cp.Variable(d)
+
+        b = cp.Variable(1)
+        w2 = cp.pnorm(w, p=2) ** 2
+        prob = cp.Problem(cp.Minimize(c.T @ e + lambda_reg * w2),
+                          [e >= (1 - cp.multiply(np.squeeze(ytrain), (xtrain @ w + b))), e >= 0])
+        prob.solve(solver='SCS')
+        # get weights
+        W = w.value
+        w = b.value
+
+        return W, w
 
     def train(self, p, train_data, train_label):
         # THIS IS WHERE YOU SHOULD WRITE YOUR TRAINING FUNCTION
@@ -54,49 +91,45 @@ class MyClassifier:
         # training. For example, your code should include a line that
         # looks like "self.W = a" and "self.w = b" for some variables "a"
         # and "b".
-        xtrain, ytrain = self.__preprocess(train_data, train_label, p)
-        print('\nshape of modified training set: ' + str(xtrain.shape))
-        print('shape of modified lbaels      : ' + str(ytrain.shape))
 
-        # formulate the problem
+        # change to array
+        data = np.array(train_data)
+        label = np.array(train_label)
+        # change to 2-d matrix
+        data = data.reshape(data.shape[0], self.M)
+        label = label.reshape(label.shape[0], -1)
+        # change type
+        data = data.astype('uint8')
+        label = label.astype('int8')
+
+        # preprocessing
         if self.K == 2:
-            n, d = xtrain.shape
-            c = np.concatenate((np.zeros([d + 1]), np.ones([n]), np.array([0.1])))
-            A1 = np.concatenate((-ytrain * xtrain, -ytrain, -np.diag(np.ones(n)), np.zeros([n, 1])), axis=1)
-            A2 = np.concatenate((0.0 * xtrain, 0.0 * ytrain, -np.diag(np.ones(n)), np.zeros([n, 1])), axis=1)
-            A3 = np.concatenate((np.zeros([2, d]), np.array([[1], [-1]]), np.zeros([2, n]), np.array([[-1], [-1]])),
-                                axis=1)
-            A = np.concatenate((A1, A2, A3), axis=0)
-            b = np.concatenate((-np.ones([n]), np.zeros([n + 2])))
-            print('\nshape of c: ' + str(c.shape))
-            print('shape of A: ' + str(A.shape))
-            print('shape of b: ' + str(b.shape))
+            xtrain, ytrain = self.__preprocess(data, label, p)
+            print('\nshape of modified training set: ' + str(xtrain.shape))
+            print('shape of modified lbaels      : ' + str(ytrain.shape))
+            W, w = self.__trainTwoClass(xtrain, ytrain)
+            self.W = W
+            self.w = w
+            print('shape of W: ' + str(self.W.shape))
+            print('shape of w      : ' + str(self.w.shape))
 
-            # solve
-            x = cp.Variable(n + d + 2)
-            prob = cp.Problem(cp.Minimize(c.T @ x), [A @ x <= b])
-            prob.solve('SCS')
-
-            # get weights
-            self.W = np.array(x.value[0:d])
-            self.w = np.array(x.value[d + 1])
         else:
-            n, d = xtrain.shape
-            k = self.K
-
-            # get variables
-            w = cp.Variable((d, k))
-            s = cp.Variable((n, k))
-            ri = np.ones((k, 1))
-            li = np.ones((n, 1))
-            # solve
-            prob = cp.Problem(cp.Minimize(li.T @ s @ ri),
-                              [s >= xtrain @ w - cp.multiply(xtrain @ w, ytrain) @ ri + 1,
-                               s >= 0])
-            prob.solve('SCS')
-            # get weights
-            self.W = np.array(w.value)
-            self.w = 0
+            labels = np.unique(train_label)
+            num_calssifier = 0
+            p = [max(0.01, p - 0.2), p, min(1, p + 0.2)]
+            for x in range(len(labels)):
+                for y in range(x, len(labels)):
+                    if x != y:
+                        self.mapping.append((labels[x], labels[y]))
+                        xtrain, ytrain, map = data_extract(data, label, [labels[x], labels[y]])
+                        xtrain, ytrain = drop_data(xtrain, ytrain, p, self.memorycontrol)
+                        print("\ntraining for : " + str(map))
+                        W, w = self.__trainTwoClass(xtrain, ytrain)
+                        self.W[num_calssifier, ] = W
+                        self.w[num_calssifier, ] = w
+                        num_calssifier = num_calssifier + 1
+            print('shape of W: ' + str(self.W.shape))
+            print('shape of w      : ' + str(self.w.shape))
 
     def f(self, input):
         # THIS IS WHERE YOU SHOULD WRITE YOUR CLASSIFICATION FUNCTION
@@ -111,16 +144,11 @@ class MyClassifier:
         # the corresponding input data point, equal to f(W^T y + w)
         # You should also check if the classifier is trained i.e. self.W and
         # self.w are nonempty
-
-        try:
-            y_pred = input.dot(self.W + self.w)
-        except:
-            raise Exception('not trained')
         if self.K == 2:
-            s = (y_pred > 0) * 2 - 1
+            s = (input > 0) * 2 - 1
+            res = [self.tag2label[x] for x in s]
         else:
-            s = np.argmax(y_pred, axis=1)
-        res = [self.tag2label[x] for x in s]
+            res = input
         return np.array(res)
 
     def classify(self, test_data):
@@ -138,7 +166,14 @@ class MyClassifier:
         # test_results: this should be a vector of length N_test,
         # containing the estimations of the classes of all the N_test
         # inputs.
-        result = self.f(test_data)
+        try:
+            if self.K == 2:
+                scores = test_data.dot(self.W) + self.w
+            else:
+                scores = test_data.dot(self.W.T) + self.w.T
+        except:
+            raise Exception('not trained')
+        result = self.f(scores)
         return result
 
     def TestCorrupted(self, p, test_data):
@@ -167,7 +202,6 @@ class MyClassifier:
 
 
 from tensorflow.keras.datasets import mnist
-a = MyClassifier(4, 1)
 # load data
 (X_train, Y_train), (X_test, Y_test) = mnist.load_data()
 xtrain = X_train.reshape(X_train.shape[0], -1)
@@ -196,7 +230,7 @@ print(np.sum(res == ytrain)/ytrain.shape[0])
 #show_img(t, ytrain, 6, 6, type='F', p_label=res)
 
 # on testing set
-t = a.TestCorrupted(0.6, xtest)
+t = a.TestCorrupted(0.8, xtest)
 res = a.classify(t)
 print('in testing set')
 print(np.sum(res == ytest)/ytest.shape[0])
@@ -211,7 +245,7 @@ xtest = X_test.reshape(X_test.shape[0], -1)
 ytest = Y_test
 
 # test 2 labels
-e = [1, 6, 7, 9]
+e = [1, 6, 7]
 idx = [l in e for l in ytrain]
 xtrain = xtrain[idx, ]
 ytrain = ytrain[idx, ]
@@ -220,9 +254,15 @@ xtest = xtest[idx, ]
 ytest = ytest[idx, ]
 
 # train
-a = MyClassifier(4, 784)
+a = MyClassifier(3, 784)
 a.train(0.6, xtrain, ytrain)
 
+t = a.TestCorrupted(0.6, xtest)
+res = a.classify(t)
+print(res.shape)
+print(a.mapping)
+
+'''
 # accuracy on training sey
 t = a.TestCorrupted(0.6, xtrain)
 res = a.classify(t)
@@ -236,3 +276,4 @@ res = a.classify(t)
 print('in testing set')
 print(np.sum(res == ytest)/ytest.shape[0])
 show_img(t, ytest, 6, 6, type='F', p_label=res)
+'''
