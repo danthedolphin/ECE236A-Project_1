@@ -38,7 +38,7 @@ class MyClassifier:
         c = np.ones(n)
 
         e = cp.Variable(n)
-        lambda_reg = 1
+        lambda_reg = 0.1
         w = cp.Variable(d)
 
         b = cp.Variable(1)
@@ -67,9 +67,12 @@ class MyClassifier:
         # looks like "self.W = a" and "self.w = b" for some variables "a"
         # and "b".
 
+        
+        
         # change to array
         data = np.array(train_data)
         label = np.array(train_label)
+
         # change to 2-d matrix
         data = data.reshape(data.shape[0], self.M)
         label = label.reshape(label.shape[0], -1)
@@ -81,10 +84,10 @@ class MyClassifier:
         if self.K == 2:
             xtrain, ytrain = self.__preprocess(data, label, p)
             print('\nshape of modified training set: ' + str(xtrain.shape))
-            print('shape of modified lbaels      : ' + str(ytrain.shape))
+            print('shape of modified labels      : ' + str(ytrain.shape))
             W, w = self.__trainTwoClass(xtrain, ytrain)
-            print('\nshape of modified training set: ' + str(self.W.shape))
-            print('shape of modified lbaels      : ' + str(self.w.shape))
+            print('\nshape of weights: ' + str(self.W.shape))
+            print('shape of bias: ' + str(self.w.shape))
             self.W = W
             self.w = w
         else:
@@ -100,6 +103,7 @@ class MyClassifier:
                     self.w[num_classifier, ] = w
                     num_classifier+=1
             print('done making {} classifiers'.format(self.K*(self.K-1)/2))
+
     def f(self, g):
         # THIS IS WHERE YOU SHOULD WRITE YOUR CLASSIFICATION FUNCTION
         #
@@ -115,15 +119,14 @@ class MyClassifier:
         # self.w are nonempty
         if self.K == 2:
             s = (g > 0) * 2 - 1
-            res = [self.tag2label[x] for x in s]
+            res = np.array([self.tag2label[x] for x in s])
         else:
             votes = np.zeros_like(g)
-            g = np.where(g>0, True, False) #True for positive values, False for negative values
             for i,x in enumerate(self.mapping):
-                votes[:,i] = [x[1] if z else x[0] for z in g[:,i]] #map the True and False to the predicted class
+                votes[:,i] = [x[1] if z>0 else x[0] for z in g[:,i]] #map the True and False to the predicted class
             votes = votes.astype(int)
-            res = stats.mode(votes,axis=1).mode #take the mode to get highest amount of votes along an axis
-        return res.squeeze()
+            res = stats.mode(votes,axis=1).mode.squeeze() #take the mode to get highest amount of votes along an axis
+        return res
 
     def classify(self, test_data):
         # THIS FUNCTION OUTPUTS ESTIMATED CLASSES FOR A DATA MATRIX
@@ -185,7 +188,7 @@ xtrain = X_train.reshape(X_train.shape[0], -1)
 ytrain =Y_train
 xtest = X_test.reshape(X_test.shape[0], -1)
 ytest = Y_test
-'''
+
 # test 2 labels
 e = [1, 7]
 idx = [l in e for l in ytrain]
@@ -196,33 +199,36 @@ xtest = xtest[idx, ]
 ytest = ytest[idx, ]
 
 # train
-a = MyClassifier(2, 784)
-a.train(0.6, xtrain, ytrain)
+a = MyClassifier(2, xtrain.shape[1])
+a.train(0.6, xtrain[:100], ytrain[:100])
 
 # accuracy on training sey
-t = a.TestCorrupted(0.6, xtrain)
-res = a.classify(t)
+res = a.TestCorrupted(0.6, xtrain)
+print(res)
+print(res.shape)
 print('in training set')
 print(np.sum(res == ytrain)/ytrain.shape[0])
+
+
 #show_img(t, ytrain, 6, 6, type='F', p_label=res)
 
 # on testing set
-t = a.TestCorrupted(0.6, xtest)
-res = a.classify(t)
-print('in testing set')
-print(np.sum(res == ytest)/ytest.shape[0])
-show_img(t, ytest, 6, 6, type='F', p_label=res)
+for p in [0.4,0.6,0.8]:
+    res = a.TestCorrupted(p, xtest)
+    print('testing set p = {}'.format(p))
+    print(np.mean(res==ytest))
+    #show_img(t, ytest, 6, 6, type='F', p_label=res)
 
 
-
+'''
 #test multi labels
 xtrain = X_train.reshape(X_train.shape[0], -1)
 ytrain =Y_train
 xtest = X_test.reshape(X_test.shape[0], -1)
 ytest = Y_test
-'''
-# test 2 labels
-e = [1,6,9]
+
+
+e = sorted([1,2,3,7,8,9,0])
 idx = [l in e for l in ytrain]
 xtrain = xtrain[idx, ]
 ytrain = ytrain[idx, ]
@@ -241,9 +247,10 @@ print('in training set')
 print(np.sum(t == ytrain)/ytrain.shape[0])
 #show_img(t, ytrain, 6, 6, type='F', p_label=res)
 
-# on testing set
+# on testing set 
 t = a.TestCorrupted(0.6, xtest)
 
 print('in testing set')
 print(np.sum(t == ytest)/ytest.shape[0])
 #show_img(t, ytest, 6, 6, type='F', p_label=t)
+'''
