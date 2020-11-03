@@ -38,7 +38,7 @@ class MyClassifier:
         c = np.ones(n)
 
         e = cp.Variable(n)
-        lambda_reg = 0.1
+        lambda_reg = 0.01
         w = cp.Variable(d)
 
         b = cp.Variable(1)
@@ -122,10 +122,20 @@ class MyClassifier:
             res = np.array([self.tag2label[x] for x in s])
         else:
             votes = np.zeros_like(g)
+            
+            '''
+            votes = np.zeros((g.shape[0],np.amax(self.mapping)+1)) #num_samples x max_label
+            pred_confidence = np.divide(g,np.linalg.norm(self.W,ord=2,axis=1)) #distance to hyperplane
+            for i,x in enumerate(self.mapping): #weighted voting system based on confidence of binary classifiers
+                neg_class = np.where(pred_confidence[:,i]<0,np.abs(pred_confidence[:,i]),0)
+                pos_class = np.where(pred_confidence[:,i]>0,pred_confidence[:,i],0)
+                votes[:,x[0]]+=neg_class
+                votes[:,x[1]]+=pos_class'''
             for i,x in enumerate(self.mapping):
                 votes[:,i] = [x[1] if z>0 else x[0] for z in g[:,i]] #map the True and False to the predicted class
             votes = votes.astype(int)
             res = stats.mode(votes,axis=1).mode.squeeze() #take the mode to get highest amount of votes along an axis
+            #res = np.argmax(votes,axis=1)
         return res
 
     def classify(self, test_data):
@@ -207,7 +217,7 @@ res = a.TestCorrupted(0.6, xtrain)
 print(res)
 print(res.shape)
 print('in training set')
-print(np.sum(res == ytrain)/ytrain.shape[0])
+print(np.mean(res == ytrain))
 
 
 #show_img(t, ytrain, 6, 6, type='F', p_label=res)
@@ -220,7 +230,7 @@ for p in [0.4,0.6,0.8]:
     #show_img(t, ytest, 6, 6, type='F', p_label=res)
 
 
-'''
+
 #test multi labels
 xtrain = X_train.reshape(X_train.shape[0], -1)
 ytrain =Y_train
@@ -228,7 +238,7 @@ xtest = X_test.reshape(X_test.shape[0], -1)
 ytest = Y_test
 
 
-e = sorted([1,2,3,7,8,9,0])
+e = sorted([1,9,0])
 idx = [l in e for l in ytrain]
 xtrain = xtrain[idx, ]
 ytrain = ytrain[idx, ]
@@ -244,13 +254,12 @@ a.train(0.6, xtrain, ytrain)
 t = a.TestCorrupted(0.6, xtrain)
 
 print('in training set')
-print(np.sum(t == ytrain)/ytrain.shape[0])
+print(np.mean(t == ytrain))
 #show_img(t, ytrain, 6, 6, type='F', p_label=res)
 
 # on testing set 
 t = a.TestCorrupted(0.6, xtest)
 
 print('in testing set')
-print(np.sum(t == ytest)/ytest.shape[0])
+print(np.mean(t == ytest))
 #show_img(t, ytest, 6, 6, type='F', p_label=t)
-'''
