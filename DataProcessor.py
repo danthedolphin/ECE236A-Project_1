@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-
+import csv
 
 # to plot images and its predicted labels
 # input
@@ -131,3 +131,66 @@ def drop_data_h(data, label, p, memorycontrol):
         label_drop[i * n_keep:(i + 1) * n_keep, ] = label[tmp_idx,]
     # save
     return data_drop, label_drop
+
+# plot a histogram of number of features that got erased
+def plot_histogram():
+    data_points = 27312
+    p = [0.4, 0.6, 0.8]
+    era_feat = [[], [], []]
+    for i in range(len(p)):
+        for _ in range(10):
+            for _ in range(data_points):
+                mask = np.random.random((784)) < p[i]
+                era_feat[i].append(np.count_nonzero(mask))
+    for i in range(len(p)):
+        plt.hist(era_feat[i], bins=100, density=True, label=f"p = {str(p[i])}")
+    plt.title("Histogram of number of erased features")
+    plt.legend()
+    plt.xlabel('Number of erased features')
+    plt.ylabel('Frequency')
+    plt.show()
+
+def plot_accuracy(acc):
+    # acc: shape of (p, trials)
+    p = [0.8, 0.6, 0.4]
+    mean_acc = np.mean(np.array(acc), axis=1)
+    for i in range(len(p)):
+        plt.scatter([p[i]] * 10, acc[i], s=20, c='black', marker='o')
+        plt.scatter(p[i], mean_acc[i], s=100, c='r', marker='*')
+    plt.plot(p, mean_acc, color='red')
+    plt.title("Classification accuracy versus the erasure probability")
+    plt.xlabel('Erasure probability')
+    plt.ylabel('Accuracy')
+    plt.show()
+
+def save_file(grp_num, weights, bias):
+    # grp_num: group number
+    # weights: (784,)
+    # bias: scalar
+    with open(f'weights_{grp_num}.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(weights)
+    with open(f'bias_{grp_num}.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow([bias])
+    
+if __name__ == '__main__':
+    plot_histogram()
+    acc = [[0.9644012944983819, 0.9722607489597781,
+            0.9644012944983819, 0.965788257050393, 
+            0.9676375404530745, 0.9680998613037448, 
+            0.9717984281091078, 0.9694868238557559, 
+            0.9731853906611189, 0.9694868238557559],
+           [0.9865926953305594, 0.9907535829865927,
+            0.9870550161812298, 0.9833564493758669,
+            0.981044845122515, 0.986130374479889,
+            0.984743411927878, 0.9875173370319001, 
+            0.9852057327785483, 0.989828941285252],
+           [0.9935275080906149,0.9902912621359223,
+            0.9944521497919556,0.9884419787332409,
+            0.9926028663892742, 0.9884419787332409, 
+            0.9879796578825705, 0.989828941285252, 
+            0.9902912621359223, 0.9926028663892742]]
+    plot_accuracy(acc)
+    
+    #save_file(2, np.random.random((784)), 2.3)

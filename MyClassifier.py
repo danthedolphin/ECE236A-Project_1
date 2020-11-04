@@ -5,8 +5,8 @@ name of this file to MyClassifier_{groupno}.py
 """
 import pandas as pd
 import numpy as np
-from scipy import stats
 import cvxpy as cp
+from scipy import stats
 from DataProcessor import *
 
 
@@ -14,12 +14,12 @@ class MyClassifier:
     def __init__(self,K,M):
         self.K = K   # Number of classes
         self.M = M   # Number of features
-        self.W = np.zeros([int(K*(K-1)/2),self.M])
-        self.w = np.zeros([int(K*(K-1)/2)])  # Bias
+        self.W = np.zeros([int(K*(K-1)/2), M])  # Weight
+        self.w = np.zeros([int(K*(K-1)/2), 1])  # Bias
         self.mapping = []  # used for K>2, to map the real labesl to training labels
         self.label2tag = []  # used for K=2, to map the real labesl to training labels
         self.tag2label = []  # used for K=2, to map the training labesl to real labels
-        # increase this value will lead to a higher memory used， 1.4 will use 21.2Gb for Minist
+        # increase this value will lead to a higher memory used， 1.5 will use 15Gb for Minist
         # but a higher memorycontrol value will lead to higher accuracy
         self.memorycontrol = 1.4
 
@@ -34,6 +34,30 @@ class MyClassifier:
         return train, label
 
     def __trainTwoClass(self, xtrain, ytrain):
+        '''
+        n, d = xtrain.shape
+        c = np.concatenate((np.zeros([d + 1]), np.ones([n]), np.array([0.1])))
+        A1 = np.concatenate((-ytrain * xtrain, -ytrain, -np.diag(np.ones(n)), np.zeros([n, 1])), axis=1)
+        A2 = np.concatenate((0.0 * xtrain, 0.0 * ytrain, -np.diag(np.ones(n)), np.zeros([n, 1])), axis=1)
+        A3 = np.concatenate((np.zeros([2, d]), np.array([[1], [-1]]), np.zeros([2, n]), np.array([[-1], [-1]])),
+                            axis=1)
+        A = np.concatenate((A1, A2, A3), axis=0)
+        b = np.concatenate((-np.ones([n]), np.zeros([n + 2])))
+        print('shape of c: ' + str(c.shape))
+        print('shape of A: ' + str(A.shape))
+        print('shape of b: ' + str(b.shape))
+
+        # solve
+        x = cp.Variable(n + d + 2)
+        prob = cp.Problem(cp.Minimize(c.T @ x), [A @ x <= b])
+        prob.solve('SCS')
+
+        # get weights
+        W = np.array(x.value[0:d])
+        w = np.array(x.value[d + 1])
+        '''
+
+        # formulate the problem
         n, d = xtrain.shape
         c = np.ones(n)
 
@@ -42,13 +66,15 @@ class MyClassifier:
         w = cp.Variable(d)
 
         b = cp.Variable(1)
-        w2 = cp.pnorm(w,p=2)**2
-        prob = cp.Problem(cp.Minimize(c.T@e+lambda_reg*w2), [e>=(1-cp.multiply(np.squeeze(ytrain),(xtrain@w+b))),e>=0])
+        w2 = cp.pnorm(w, p=2) ** 2
+        prob = cp.Problem(cp.Minimize(c.T @ e + lambda_reg * w2),
+                          [e >= (1 - cp.multiply(np.squeeze(ytrain), (xtrain @ w + b))), e >= 0])
         prob.solve(solver='SCS')
+        # get weights
+        W = w.value
+        w = b.value
 
-        w = w.value
-        b = b.value
-        return w, b
+        return W, w
 
     def train(self, p, train_data, train_label):
         # THIS IS WHERE YOU SHOULD WRITE YOUR TRAINING FUNCTION
@@ -67,12 +93,9 @@ class MyClassifier:
         # looks like "self.W = a" and "self.w = b" for some variables "a"
         # and "b".
 
-        
-        
         # change to array
         data = np.array(train_data)
         label = np.array(train_label)
-
         # change to 2-d matrix
         data = data.reshape(data.shape[0], self.M)
         label = label.reshape(label.shape[0], -1)
@@ -86,25 +109,30 @@ class MyClassifier:
             print('\nshape of modified training set: ' + str(xtrain.shape))
             print('shape of modified labels      : ' + str(ytrain.shape))
             W, w = self.__trainTwoClass(xtrain, ytrain)
-            print('\nshape of weights: ' + str(self.W.shape))
-            print('shape of bias: ' + str(self.w.shape))
             self.W = W
             self.w = w
-        else:
-            labels = np.unique(train_label[:-1])
-            num_classifier = 0
-            for i,x in enumerate(labels):
-                for y in labels[i+1:]:
-                    self.mapping.append((x, y))
-                    xtrain, ytrain, mapping = data_extract(data, label, [x, y])
-                    print("training for : " + str(mapping))
-                    W, w = self.__trainTwoClass(xtrain, ytrain)
-                    self.W[num_classifier, ] = W
-                    self.w[num_classifier, ] = w
-                    num_classifier+=1
-            print('done making {} classifiers'.format(self.K*(self.K-1)/2))
+            print('shape of W: ' + str(self.W.shape))
+            print('shape of w: ' + str(self.w.shape))
 
-    def f(self, g):
+        else:
+            labels = np.unique(train_label)
+            num_calssifier = 0
+            p = [max(0.01, p - 0.2), p, min(1, p + 0.2)]
+            for x in range(len(labels)):
+                for y in range(x, len(labels)):
+                    if x != y:
+                        self.mapping.append((labels[x], labels[y]))
+                        xtrain, ytrain, map = data_extract(data, label, [labels[x], labels[y]])
+                        xtrain, ytrain = drop_data(xtrain, ytrain, p, self.memorycontrol)
+                        print("\ntraining for : " + str(map))
+                        W, w = self.__trainTwoClass(xtrain, ytrain)
+                        self.W[num_calssifier, ] = W
+                        self.w[num_calssifier, ] = w
+                        num_calssifier = num_calssifier + 1
+            print('shape of W: ' + str(self.W.shape))
+            print('shape of w: ' + str(self.w.shape))
+
+    def f(self, input):
         # THIS IS WHERE YOU SHOULD WRITE YOUR CLASSIFICATION FUNCTION
         #
         # The inputs of this function are:
@@ -118,25 +146,17 @@ class MyClassifier:
         # You should also check if the classifier is trained i.e. self.W and
         # self.w are nonempty
         if self.K == 2:
-            s = (g > 0) * 2 - 1
-            res = np.array([self.tag2label[x] for x in s])
+            s = (input > 0) * 2 - 1
+            # = [self.tag2label[x] for x in s]
+            res = self.tag2label[s]
         else:
+            g = input
             votes = np.zeros_like(g)
-            
-            '''
-            votes = np.zeros((g.shape[0],np.amax(self.mapping)+1)) #num_samples x max_label
-            pred_confidence = np.divide(g,np.linalg.norm(self.W,ord=2,axis=1)) #distance to hyperplane
-            for i,x in enumerate(self.mapping): #weighted voting system based on confidence of binary classifiers
-                neg_class = np.where(pred_confidence[:,i]<0,np.abs(pred_confidence[:,i]),0)
-                pos_class = np.where(pred_confidence[:,i]>0,pred_confidence[:,i],0)
-                votes[:,x[0]]+=neg_class
-                votes[:,x[1]]+=pos_class'''
-            for i,x in enumerate(self.mapping):
-                votes[:,i] = [x[1] if z>0 else x[0] for z in g[:,i]] #map the True and False to the predicted class
-            votes = votes.astype(int)
-            res = stats.mode(votes,axis=1).mode.squeeze() #take the mode to get highest amount of votes along an axis
-            #res = np.argmax(votes,axis=1)
-        return res
+            #g = np.where(g > 0, True, False) #True for positive values, False for negative values
+            for i, x in enumerate(self.mapping):
+                votes[i]= x[1] if g[i]>0 else x[0] #map the True and False to the predicted class
+            res = int(stats.mode(votes).mode[0]) #take the mode to get highest amount of votes along an axis
+        return (res)
 
     def classify(self, test_data):
         # THIS FUNCTION OUTPUTS ESTIMATED CLASSES FOR A DATA MATRIX
@@ -153,14 +173,13 @@ class MyClassifier:
         # test_results: this should be a vector of length N_test,
         # containing the estimations of the classes of all the N_test
         # inputs.
-        try:
-            if self.K == 2:
-                scores = test_data.dot(self.W) + self.w
-            else:
-                scores = test_data @ self.W.T + self.w
-        except:
-            raise Exception('not trained')
-        result = self.f(scores)
+        if (self.W==np.zeros_like(self.W)).all() or (self.w==np.zeros_like(self.w)).all():
+            raise Exception('Not Trained')
+        if self.K == 2:
+            scores = test_data.dot(self.W) + self.w
+        else:
+            scores = test_data.dot(self.W.T) + self.w.T
+        result = [self.f(score) for score in scores]
         return result
 
     def TestCorrupted(self, p, test_data):
@@ -189,77 +208,3 @@ class MyClassifier:
         return est_classes
 
 
-from tensorflow.keras.datasets import mnist
-
-a = MyClassifier(4, 1)
-# load data
-(X_train, Y_train), (X_test, Y_test) = mnist.load_data()
-xtrain = X_train.reshape(X_train.shape[0], -1)
-ytrain =Y_train
-xtest = X_test.reshape(X_test.shape[0], -1)
-ytest = Y_test
-
-# test 2 labels
-e = [1, 7]
-idx = [l in e for l in ytrain]
-xtrain = xtrain[idx, ]
-ytrain = ytrain[idx, ]
-idx = [l in e for l in ytest]
-xtest = xtest[idx, ]
-ytest = ytest[idx, ]
-
-# train
-a = MyClassifier(2, xtrain.shape[1])
-a.train(0.6, xtrain[:100], ytrain[:100])
-
-# accuracy on training sey
-res = a.TestCorrupted(0.6, xtrain)
-print(res)
-print(res.shape)
-print('in training set')
-print(np.mean(res == ytrain))
-
-
-#show_img(t, ytrain, 6, 6, type='F', p_label=res)
-
-# on testing set
-for p in [0.4,0.6,0.8]:
-    res = a.TestCorrupted(p, xtest)
-    print('testing set p = {}'.format(p))
-    print(np.mean(res==ytest))
-    #show_img(t, ytest, 6, 6, type='F', p_label=res)
-
-
-
-#test multi labels
-xtrain = X_train.reshape(X_train.shape[0], -1)
-ytrain =Y_train
-xtest = X_test.reshape(X_test.shape[0], -1)
-ytest = Y_test
-
-
-e = sorted([1,9,0])
-idx = [l in e for l in ytrain]
-xtrain = xtrain[idx, ]
-ytrain = ytrain[idx, ]
-idx = [l in e for l in ytest]
-xtest = xtest[idx, ]
-ytest = ytest[idx, ]
-
-# train
-a = MyClassifier(len(e), 784)
-a.train(0.6, xtrain, ytrain)
-
-# accuracy on training sey
-t = a.TestCorrupted(0.6, xtrain)
-
-print('in training set')
-print(np.mean(t == ytrain))
-#show_img(t, ytrain, 6, 6, type='F', p_label=res)
-
-# on testing set 
-t = a.TestCorrupted(0.6, xtest)
-
-print('in testing set')
-print(np.mean(t == ytest))
-#show_img(t, ytest, 6, 6, type='F', p_label=t)
